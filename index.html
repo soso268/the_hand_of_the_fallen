@@ -144,49 +144,73 @@ const API_BASE = "https://thehandwilfallanyway.lamysophiane.workers.dev";
     if (e.key === "Enter") checkCode();
   });
 
-  function checkCode() {
-    const value = input.value.trim();
+async function checkCode() {
+  const value = input.value.trim();
 
-    if (isLocked()) {
-      showLockdownStatus();
-      input.value = "";
-      return;
-    }
-
-    typingToken++;
-    output.textContent = "";
-    output.className = "line";
+  if (isLocked()) {
+    showLockdownStatus();
     input.value = "";
+    return;
+  }
 
-    if (value === VALID_CODE) {
-      failCount = 0;
-      typeLine(output, "Comment est-ce possible ?", 25, "ok", () => {
-        setTimeout(() => window.location.href = REDIRECT_URL, 1000);
-      });
-      return;
+  typingToken++;
+  output.textContent = "";
+  output.className = "line";
+  input.value = "";
+
+  if (!value) {
+    failCount++;
+    return showRebelAndMaybeLock();
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/unlock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: value })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.token) {
+      failCount++;
+      return showRebelAndMaybeLock();
     }
 
-    // erreur (format mauvais OU faux code)
-    failCount++;
+    failCount = 0;
 
-    const msg1 = randomMsg();
-    const msg2 = randomMsg();
-    const msg3 = (failCount >= MAX_FAILS) ? "Trop tard." : "Tu n’es pas prêt.";
-
-    typeLine(output, msg1, 20, "err", () => {
+    typeLine(output, "Comment est-ce possible ?", 25, "ok", () => {
       setTimeout(() => {
-        output.textContent += "\n";
-        typeLine(output, msg2, 20, "err", () => {
-          setTimeout(() => {
-            output.textContent += "\n";
-            typeLine(output, msg3, 22, "err", () => {
-              if (failCount >= MAX_FAILS) startLockdown();
-            });
-          }, 450);
-        });
-      }, 450);
+        window.location.href = `${API_BASE}/go?t=${encodeURIComponent(data.token)}`;
+      }, 800);
     });
+
+  } catch (e) {
+    failCount++;
+    showRebelAndMaybeLock("Le réseau ment. Ou c’est moi.");
   }
+}
+
+function showRebelAndMaybeLock(extraLine) {
+  const msg1 = randomMsg();
+  const msg2 = randomMsg();
+  const msg3 = (failCount >= MAX_FAILS) ? "Trop tard." : "Tu n’es pas prêt.";
+
+  typeLine(output, msg1, 20, "err", () => {
+    setTimeout(() => {
+      output.textContent += "\n";
+      typeLine(output, msg2, 20, "err", () => {
+        setTimeout(() => {
+          output.textContent += "\n";
+          if (extraLine) output.textContent += extraLine + "\n";
+          typeLine(output, msg3, 22, "err", () => {
+            if (failCount >= MAX_FAILS) startLockdown();
+          });
+        }, 450);
+      });
+    }, 450);
+  });
+}
 
   function startLockdown() {
     lockedUntil = Date.now() + LOCKDOWN_MS;
