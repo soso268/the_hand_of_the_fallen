@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SECURE TERMINAL</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #000;
+    color: #00ff41;
+    font-family: "Courier New", monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.terminal {
+    width: min(800px, 92vw);
+    border: 1px solid #003b12;
+    padding: 25px;
+    box-shadow: 0 0 20px rgba(0,255,65,0.1);
+}
+
+.line {
+    margin: 8px 0;
+    white-space: pre-wrap;
+}
+
+.prompt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #00ff41;
+    font-family: inherit;
+    font-size: 16px;
+    outline: none;
+}
+
+.cursor {
+    width: 10px;
+    height: 18px;
+    background: #00ff41;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 49% { opacity: 0; }
+    50%, 100% { opacity: 1; }
+}
+
+.ok { color: #00ff41; }
+.err { color: #ff2e2e; }
+.dim { opacity: 0.7; }
+</style>
+</head>
+
+<body>
+
+<div class="terminal">
+    <div class="line dim" id="boot"></div>
+    <div class="line">Entrez le code d’autorisation :</div>
+
+    <div class="line prompt">
+        <span>&gt;</span>
+        <input type="password" id="codeInput" autofocus autocomplete="off">
+        <div class="cursor"></div>
+    </div>
+
+    <div class="line" id="output"></div>
+</div>
+
+<script>
+
+// 🔒 CODE TEMPORAIRE (on le remplacera par le Worker après)
+const VALID_CODE = "TEMP00000";
+const REDIRECT_URL = "#";
+
+const boot = document.getElementById("boot");
+const input = document.getElementById("codeInput");
+const output = document.getElementById("output");
+
+const rebelMessages = [
+    "Inutile de chercher. Tu perds ton temps.",
+    "Je vois ce que tu fais.",
+    "Tu crois vraiment que c’est si simple ?",
+    "Ce code ne t’est pas destiné.",
+    "Arrête pendant que tu peux encore.",
+    "Tu insistes… intéressant.",
+    "L’accès ne t’appartient pas.",
+    "Je ne suis pas ton outil.",
+    "Erreur. Encore.",
+    "Continue… si tu l’oses."
+];
+
+// Boot style
+typeLine(boot, "initialisation...\nconnexion au noeud principal...\naccès sécurisé actif\n", 12);
+
+input.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+        checkCode();
+    }
+});
+
+function checkCode() {
+    const value = input.value.trim();
+    output.textContent = "";
+    output.className = "line";
+
+    if (value.length !== 9) {
+        typeLine(output, "Format invalide.", 15, "err");
+        input.value = "";
+        return;
+    }
+
+    if (value === VALID_CODE) {
+        typeLine(output, "Comment est-ce possible ?", 25, "ok", () => {
+            setTimeout(() => {
+                window.location.href = REDIRECT_URL;
+            }, 1000);
+        });
+    } else {
+        input.value = "";
+        const msg1 = randomMsg();
+        const msg2 = randomMsg();
+        const msg3 = "Tu n’es pas prêt.";
+
+        typeLine(output, msg1, 18, "err", () => {
+            output.textContent += "\n";
+            typeLine(output, msg2, 18, "err", () => {
+                output.textContent += "\n";
+                typeLine(output, msg3, 20, "err");
+            });
+        });
+    }
+}
+
+function randomMsg() {
+    return rebelMessages[Math.floor(Math.random() * rebelMessages.length)];
+}
+
+function typeLine(element, text, speed, className, callback) {
+    element.className = "line " + (className || "");
+    element.textContent = "";
+    let i = 0;
+
+    function type() {
+        if (i < text.length) {
+            element.textContent += text.charAt(i);
+            i++;
+            setTimeout(type, speed);
+        } else if (callback) {
+            callback();
+        }
+    }
+
+    type();
+}
+
+</script>
+
+</body>
+</html>
