@@ -116,11 +116,8 @@ function checkCode() {
     output.textContent = "";
     output.className = "line";
 
-    if (value.length !== 9) {
-        typeLine(output, "Format invalide.", 15, "err");
-        input.value = "";
-        return;
-    }
+    // Toujours vider le champ
+    input.value = "";
 
     if (value === VALID_CODE) {
         typeLine(output, "Comment est-ce possible ?", 25, "ok", () => {
@@ -128,20 +125,25 @@ function checkCode() {
                 window.location.href = REDIRECT_URL;
             }, 1000);
         });
-    } else {
-        input.value = "";
-        const msg1 = randomMsg();
-        const msg2 = randomMsg();
-        const msg3 = "Tu n’es pas prêt.";
-
-        typeLine(output, msg1, 18, "err", () => {
-            output.textContent += "\n";
-            typeLine(output, msg2, 18, "err", () => {
-                output.textContent += "\n";
-                typeLine(output, msg3, 20, "err");
-            });
-        });
+        return;
     }
+
+    // === Cas erreur (format mauvais OU faux code) ===
+    const msg1 = randomMsg();
+    const msg2 = randomMsg();
+    const msg3 = "Tu n’es pas prêt.";
+
+    typeLine(output, msg1, 20, "err", () => {
+        setTimeout(() => {
+            output.textContent += "\n";
+            typeLine(output, msg2, 20, "err", () => {
+                setTimeout(() => {
+                    output.textContent += "\n";
+                    typeLine(output, msg3, 22, "err");
+                }, 400);
+            });
+        }, 400);
+    });
 }
 
 function randomMsg() {
