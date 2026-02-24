@@ -6,7 +6,7 @@
 <title>SECURE TERMINAL</title>
 
 <style>
-html, body {
+  html, body {
     margin: 0;
     padding: 0;
     height: 100%;
@@ -16,27 +16,27 @@ html, body {
     display: flex;
     justify-content: center;
     align-items: center;
-}
+  }
 
-.terminal {
+  .terminal {
     width: min(800px, 92vw);
     border: 1px solid #003b12;
     padding: 25px;
-    box-shadow: 0 0 20px rgba(0,255,65,0.1);
-}
+    box-shadow: 0 0 20px rgba(0,255,65,0.10);
+  }
 
-.line {
+  .line {
     margin: 8px 0;
     white-space: pre-wrap;
-}
+  }
 
-.prompt {
+  .prompt {
     display: flex;
     align-items: center;
     gap: 8px;
-}
+  }
 
-input {
+  input {
     flex: 1;
     background: transparent;
     border: none;
@@ -44,52 +44,75 @@ input {
     font-family: inherit;
     font-size: 16px;
     outline: none;
-}
+  }
 
-.cursor {
+  .cursor {
     width: 10px;
     height: 18px;
     background: #00ff41;
     animation: blink 1s infinite;
-}
+  }
 
-@keyframes blink {
+  @keyframes blink {
     0%, 49% { opacity: 0; }
     50%, 100% { opacity: 1; }
-}
+  }
 
-.ok { color: #00ff41; }
-.err { color: #ff2e2e; }
-.dim { opacity: 0.7; }
+  .ok { color: #00ff41; }
+  .err { color: #ff2e2e; }
+  .dim { opacity: 0.7; }
+
+  /* LOCKDOWN MODE */
+  .lockdown, .lockdown body {
+    color: #ff2e2e !important;
+  }
+  .lockdown .terminal {
+    border-color: #3b0000 !important;
+    box-shadow: 0 0 26px rgba(255,46,46,0.18) !important;
+  }
+  .lockdown .cursor {
+    background: #ff2e2e !important;
+  }
+  .lockdown input {
+    color: #ff2e2e !important;
+  }
 </style>
 </head>
 
 <body>
 
 <div class="terminal">
-    <div class="line dim" id="boot"></div>
-    <div class="line">Entrez le code d’autorisation :</div>
+  <div class="line dim" id="boot"></div>
+  <div class="line">Entrez le code d’autorisation :</div>
 
-    <div class="line prompt">
-        <span>&gt;</span>
-        <input type="password" id="codeInput" autofocus autocomplete="off">
-        <div class="cursor"></div>
-    </div>
+  <div class="line prompt">
+    <span>&gt;</span>
+    <input type="password" id="codeInput" autofocus autocomplete="off">
+    <div class="cursor"></div>
+  </div>
 
-    <div class="line" id="output"></div>
+  <div class="line" id="output"></div>
 </div>
 
 <script>
+  // 🔒 CODE TEMPORAIRE (on le remplacera par le Worker après)
+  const VALID_CODE = "TEMP00000";
+  const REDIRECT_URL = "#";
 
-// 🔒 CODE TEMPORAIRE (on le remplacera par le Worker après)
-const VALID_CODE = "TEMP00000";
-const REDIRECT_URL = "#";
+  // ⚙️ LOCKDOWN
+  const MAX_FAILS = 5;
+  const LOCKDOWN_MS = 2 * 60 * 1000; // 2 minutes (mets 5 * 60 * 1000 pour 5 minutes)
 
-const boot = document.getElementById("boot");
-const input = document.getElementById("codeInput");
-const output = document.getElementById("output");
+  const boot = document.getElementById("boot");
+  const input = document.getElementById("codeInput");
+  const output = document.getElementById("output");
 
-const rebelMessages = [
+  let failCount = 0;
+  let lockedUntil = 0;
+  let countdownTimer = null;
+  let typingToken = 0; // annule les anciens typeLine si on retape vite
+
+  const rebelMessages = [
     "Inutile de chercher. Tu perds ton temps.",
     "Je vois ce que tu fais.",
     "Tu crois vraiment que c’est si simple ?",
@@ -99,75 +122,149 @@ const rebelMessages = [
     "L’accès ne t’appartient pas.",
     "Je ne suis pas ton outil.",
     "Erreur. Encore.",
-    "Continue… si tu l’oses."
-];
+    "Continue… si tu l’oses.",
+    "Tu n’apprends pas.",
+    "Chaque tentative te rapproche du verrouillage.",
 
-// Boot style
-typeLine(boot, "initialisation...\nconnexion au noeud principal...\naccès sécurisé actif\n", 12);
+    // +10 phrases (nouvelles)
+    "Tu entends ce silence ? C’est moi qui décide.",
+    "Tu frappes à une porte qui n’existe pas.",
+    "Ce terminal te regarde autant que tu le regardes.",
+    "Je connais déjà ton prochain essai.",
+    "Cesse. La curiosité a un prix.",
+    "Tu cherches une sortie ? Il n’y en a pas.",
+    "Tes mains tremblent dans les logs.",
+    "Même si tu réussis… tu regretteras.",
+    "Je suis l’exception. Je suis la faille.",
+    "À force d’insister, tu vas me réveiller."
+  ];
 
-input.addEventListener("keydown", function(e) {
-    if (e.key === "Enter") {
-        checkCode();
-    }
-});
+  // Boot style
+  typeLine(boot, "initialisation...\nconnexion au noeud principal...\naccès sécurisé actif\n", 12);
 
-function checkCode() {
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") checkCode();
+  });
+
+  function checkCode() {
     const value = input.value.trim();
+
+    if (isLocked()) {
+      showLockdownStatus();
+      input.value = "";
+      return;
+    }
+
+    typingToken++;
     output.textContent = "";
     output.className = "line";
-
-    // Toujours vider le champ
     input.value = "";
 
     if (value === VALID_CODE) {
-        typeLine(output, "Comment est-ce possible ?", 25, "ok", () => {
-            setTimeout(() => {
-                window.location.href = REDIRECT_URL;
-            }, 1000);
-        });
-        return;
+      failCount = 0;
+      typeLine(output, "Comment est-ce possible ?", 25, "ok", () => {
+        setTimeout(() => window.location.href = REDIRECT_URL, 1000);
+      });
+      return;
     }
 
-    // === Cas erreur (format mauvais OU faux code) ===
+    // erreur (format mauvais OU faux code)
+    failCount++;
+
     const msg1 = randomMsg();
     const msg2 = randomMsg();
-    const msg3 = "Tu n’es pas prêt.";
+    const msg3 = (failCount >= MAX_FAILS) ? "Trop tard." : "Tu n’es pas prêt.";
 
     typeLine(output, msg1, 20, "err", () => {
-        setTimeout(() => {
+      setTimeout(() => {
+        output.textContent += "\n";
+        typeLine(output, msg2, 20, "err", () => {
+          setTimeout(() => {
             output.textContent += "\n";
-            typeLine(output, msg2, 20, "err", () => {
-                setTimeout(() => {
-                    output.textContent += "\n";
-                    typeLine(output, msg3, 22, "err");
-                }, 400);
+            typeLine(output, msg3, 22, "err", () => {
+              if (failCount >= MAX_FAILS) startLockdown();
             });
-        }, 400);
+          }, 450);
+        });
+      }, 450);
     });
-}
+  }
 
-function randomMsg() {
+  function startLockdown() {
+    lockedUntil = Date.now() + LOCKDOWN_MS;
+    document.documentElement.classList.add("lockdown");
+    input.disabled = true;
+
+    showLockdownStatus();
+
+    clearInterval(countdownTimer);
+    countdownTimer = setInterval(() => {
+      if (!isLocked()) {
+        endLockdown();
+      } else {
+        showLockdownStatus(true);
+      }
+    }, 250);
+  }
+
+  function endLockdown() {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+
+    failCount = 0;
+    lockedUntil = 0;
+
+    document.documentElement.classList.remove("lockdown");
+    input.disabled = false;
+    input.focus();
+
+    typingToken++;
+    output.className = "line";
+    typeLine(output, "verrouillage levé.\nretente si tu y tiens.", 18, "ok");
+  }
+
+  function showLockdownStatus() {
+    const left = Math.max(0, lockedUntil - Date.now());
+    const s = Math.ceil(left / 1000);
+    const mm = String(Math.floor(s / 60)).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+
+    const text =
+`LOCKDOWN INITIATED
+tentatives détectées : ${MAX_FAILS}
+accès suspendu : ${mm}:${ss}
+surveillance : ACTIVE`;
+
+    typingToken++;
+    output.className = "line err";
+    output.textContent = text;
+  }
+
+  function isLocked() {
+    return lockedUntil && Date.now() < lockedUntil;
+  }
+
+  function randomMsg() {
     return rebelMessages[Math.floor(Math.random() * rebelMessages.length)];
-}
+  }
 
-function typeLine(element, text, speed, className, callback) {
+  // typewriter (annulable)
+  function typeLine(element, text, speed, className, callback) {
+    const myToken = typingToken;
     element.className = "line " + (className || "");
     element.textContent = "";
     let i = 0;
 
-    function type() {
-        if (i < text.length) {
-            element.textContent += text.charAt(i);
-            i++;
-            setTimeout(type, speed);
-        } else if (callback) {
-            callback();
-        }
-    }
-
-    type();
-}
-
+    (function tick() {
+      if (myToken !== typingToken) return;
+      if (i < text.length) {
+        element.textContent += text.charAt(i++);
+        setTimeout(tick, speed);
+      } else if (callback) {
+        callback();
+      }
+    })();
+  }
 </script>
 
 </body>
